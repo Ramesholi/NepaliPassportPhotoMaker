@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pro Passport Photo Maker Nepal — Cyber Studio Edition</title>
+  <meta name="description" content="Frontend-only professional passport photo maker with Nepal presets, background removal, A4 layout, PDF/PNG export, and print-ready output." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script src="https://unpkg.com/cropperjs@1.6.2/dist/cropper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.1/dist/body-pix.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar glass">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <div class="brand-title">Pro Passport Photo Maker Nepal</div>
+          <div class="brand-subtitle">Cyber Studio Edition</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="file-drop" for="fileInput" id="dropZone">
+          <input id="fileInput" type="file" accept="image/*" multiple hidden />
+          <div class="drop-icon">⬆</div>
+          <div class="drop-title">Upload photos</div>
+          <div class="drop-subtitle">Drag & drop or tap to add mobile/desktop images</div>
+        </label>
+      </div>
+
+      <div class="sidebar-section">
+        <button class="nav-btn active" data-panel="uploadPanel">Upload</button>
+        <button class="nav-btn" data-panel="sizesPanel">Sizes</button>
+        <button class="nav-btn" data-panel="editorPanel">Editor</button>
+        <button class="nav-btn" data-panel="layoutPanel">Layout</button>
+        <button class="nav-btn" data-panel="exportPanel">Export</button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Imported photos</div>
+        <div id="photoList" class="photo-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button id="themeToggle" class="ghost-btn">Toggle theme</button>
+        <button id="saveProjectBtn" class="ghost-btn">Save JSON</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar glass">
+        <div class="topbar-left">
+          <div class="pill" id="activePhotoPill">No photo selected</div>
+          <div class="pill" id="sizeInfoPill">1 × 1.2 inch · 300 DPI</div>
+        </div>
+        <div class="topbar-right">
+          <button id="undoBtn" class="icon-btn" title="Undo (Ctrl+Z)">↶</button>
+          <button id="redoBtn" class="icon-btn" title="Redo (Ctrl+Y)">↷</button>
+          <button id="zoomOutBtn" class="icon-btn" title="Zoom out">−</button>
+          <button id="zoomInBtn" class="icon-btn" title="Zoom in">+</button>
+          <button id="fitBtn" class="icon-btn" title="Fit">⌂</button>
+        </div>
+      </header>
+
+      <section class="hero glass">
+        <div class="hero-copy">
+          <h1>Studio-grade passport photo workflow, fully in your browser.</h1>
+          <p>Upload, align, remove background, tune color, generate copies, build A4 layouts, export PNG/PDF, and print instantly.</p>
+          <div class="hero-actions">
+            <button id="generateBtn" class="primary-btn">Generate preview</button>
+            <button id="printBtn" class="secondary-btn">Direct print</button>
+            <button id="loadProjectBtn" class="secondary-btn">Load JSON</button>
+            <input id="loadProjectInput" type="file" accept="application/json" hidden>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span>Mode</span>
+            <strong id="modeLabel">Editor</strong>
+          </div>
+          <div class="stat-card">
+            <span>Copies</span>
+            <strong id="copiesLabel">4</strong>
+          </div>
+          <div class="stat-card">
+            <span>Canvas</span>
+            <strong id="canvasLabel">A4</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="preview-column glass">
+          <div class="preview-tabs">
+            <button class="tab-btn active" data-preview="editorPreview">Editor</button>
+            <button class="tab-btn" data-preview="sheetPreview">Sheet</button>
+            <button class="tab-btn" data-preview="layoutPreview">Layout</button>
+          </div>
+
+          <div id="editorPreview" class="preview-pane active">
+            <div class="editor-stage">
+              <div class="stage-overlay">
+                <div class="guide guide-circle"></div>
+                <div class="guide guide-grid"></div>
+                <div class="guide-text">Align face inside guide. Drag, zoom, and crop with precision.</div>
+              </div>
+              <img id="editorImage" alt="Selected photo preview" />
+              <div class="empty-state" id="editorEmptyState">
+                Upload an image to start editing.
+              </div>
+            </div>
+            <div class="mini-toolbar">
+              <button id="rotateLeftBtn" class="mini-btn">Rotate −90°</button>
+              <button id="rotateRightBtn" class="mini-btn">Rotate +90°</button>
+              <button id="bgRemoveBtn" class="mini-btn">Remove background</button>
+              <button id="autoEnhanceBtn" class="mini-btn">Auto enhance</button>
+              <button id="resetEditsBtn" class="mini-btn">Reset</button>
+            </div>
+          </div>
+
+          <div id="sheetPreview" class="preview-pane">
+            <canvas id="sheetCanvas"></canvas>
+            <div class="sheet-note">Print-ready sheet preview with safe margins.</div>
+          </div>
+
+          <div id="layoutPreview" class="preview-pane">
+            <canvas id="layoutCanvas"></canvas>
+            <div class="sheet-note">Drag, resize, and arrange multiple photos on an A4 page.</div>
+          </div>
+        </div>
+
+        <aside class="right-panel glass">
+          <div id="uploadPanel" class="panel-section active">
+            <div class="section-head">
+              <h2>Upload & library</h2>
+              <p>Manage your imported source photos here.</p>
+            </div>
+            <div class="stack">
+              <button id="clearAllBtn" class="secondary-btn wide">Clear all photos</button>
+              <button id="refreshPreviewBtn" class="secondary-btn wide">Refresh preview</button>
+            </div>
+          </div>
+
+          <div id="sizesPanel" class="panel-section">
+            <div class="section-head">
+              <h2>Photo sizes</h2>
+              <p>Nepal presets and custom dimensions.</p>
+            </div>
+
+            <label class="field">
+              <span>Preset</span>
+              <select id="sizePreset">
+                <option value="nepal_small">नेपाली पासपोर्ट स्मल साइज — 1 × 1.2 inch</option>
+                <option value="passport">पासपोर्ट साइज — 1.5 × 1.5 inch</option>
+                <option value="visa">भिसा फोटो — 2 × 2 inch</option>
+                <option value="citizenship">नागरिकता फोटो — 35mm × 45mm</option>
+                <option value="id">ID कार्ड फोटो — 1 × 1 inch</option>
+                <option value="custom">Custom size</option>
+              </select>
+            </label>
+
+            <div class="two-col">
+              <label class="field">
+                <span>Width</span>
+                <input id="customWidth" type="number" min="0.1" step="0.1" value="1" />
+              </label>
+              <label class="field">
+                <span>Height</span>
+                <input id="customHeight" type="number" min="0.1" step="0.1" value="1.2" />
+              </label>
+            </div>
+
+            <div class="two-col">
+              <label class="field">
+                <span>Unit</span>
+                <select id="sizeUnit">
+                  <option value="inch">inch</option>
+                  <option value="mm">mm</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>DPI</span>
+                <select id="dpiSelect">
+                  <option value="300">300</option>
+                  <option value="600">600</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field" id="customDpiWrap" style="display:none;">
+              <span>Custom DPI</span>
+              <input id="customDpi" type="number" min="72" step="1" value="300" />
+            </label>
+
+            <div class="size-grid" id="presetCards"></div>
+          </div>
+
+          <div id="editorPanel" class="panel-section">
+            <div class="section-head">
+              <h2>Editor controls</h2>
+              <p>Studio-style adjustments for the active photo.</p>
+            </div>
+
+            <label class="field">
+              <span>Brightness <strong id="brightnessVal">0</strong></span>
+              <input id="brightness" type="range" min="-100" max="100" value="0">
+            </label>
+            <label class="field">
+              <span>Contrast <strong id="contrastVal">0</strong></span>
+              <input id="contrast" type="range" min="-100" max="100" value="0">
+            </label>
+            <label class="field">
+              <span>Saturation <strong id="saturationVal">0</strong></span>
+              <input id="saturation" type="range" min="-100" max="100" value="0">
+            </label>
+            <label class="field">
+              <span>Sharpness <strong id="sharpnessVal">0</strong></span>
+              <input id="sharpness" type="range" min="0" max="100" value="0">
+            </label>
+            <label class="field">
+              <span>Temperature <strong id="temperatureVal">0</strong></span>
+              <input id="temperature" type="range" min="-100" max="100" value="0">
+            </label>
+
+            <div class="two-col">
+              <label class="field">
+                <span>Background</span>
+                <select id="bgColorPreset">
+                  <option value="#ffffff">White</option>
+                  <option value="#1f6feb">Blue</option>
+                  <option value="#dc2626">Red</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Custom</span>
+                <input id="customBgColor" type="color" value="#ffffff">
+              </label>
+            </div>
+
+            <div class="stack">
+              <label class="toggle-row"><input id="bgRemovalToggle" type="checkbox"> Background removal enabled for export</label>
+              <label class="toggle-row"><input id="snapGridToggle" type="checkbox" checked> Snap objects to grid</label>
+              <label class="toggle-row"><input id="showSafeToggle" type="checkbox" checked> Show safe margin</label>
+            </div>
+          </div>
+
+          <div id="layoutPanel" class="panel-section">
+            <div class="section-head">
+              <h2>Layout & copies</h2>
+              <p>Generate sheets and multi-person A4 compositions.</p>
+            </div>
+
+            <label class="field">
+              <span>Copies</span>
+              <select id="copiesSelect">
+                <option>2</option>
+                <option selected>4</option>
+                <option>6</option>
+                <option>8</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+
+            <label class="field" id="customCopiesWrap" style="display:none;">
+              <span>Custom copies</span>
+              <input id="customCopies" type="number" min="1" step="1" value="12">
+            </label>
+
+            <div class="two-col">
+              <label class="field">
+                <span>Margin (mm)</span>
+                <input id="marginMm" type="number" min="0" step="0.5" value="6">
+              </label>
+              <label class="field">
+                <span>Spacing (mm)</span>
+                <input id="spacingMm" type="number" min="0" step="0.5" value="3">
+              </label>
+            </div>
+
+            <div class="stack">
+              <button id="addToLayoutBtn" class="secondary-btn wide">Add current photo to layout</button>
+              <button id="clearLayoutBtn" class="secondary-btn wide">Clear layout page</button>
+            </div>
+          </div>
+
+          <div id="exportPanel" class="panel-section">
+            <div class="section-head">
+              <h2>Export</h2>
+              <p>PNG, PDF, or direct print.</p>
+            </div>
+
+            <div class="stack">
+              <button id="downloadPngBtn" class="primary-btn wide">Download PNG</button>
+              <button id="downloadPdfBtn" class="primary-btn wide">Download PDF</button>
+              <button id="printPreviewBtn" class="secondary-btn wide">Print preview</button>
+            </div>
+
+            <div class="small-print">
+              Saves as high-resolution output based on your selected DPI.
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <input id="layoutImagePicker" type="file" accept="image/*" hidden />
+    </main>
+  </div>
+
+  <div id="toast" class="toast">Ready</div>
+
+  <script src="script.js"></script>
+</body>
+</html>
